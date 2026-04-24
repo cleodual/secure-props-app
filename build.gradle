@@ -1,0 +1,46 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.cleodual.mulesoft'
+version = '1.0-SNAPSHOT'
+
+
+
+application {
+    mainClass = 'com.cleodual.mulesoft.Main'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation files('libs/secure-properties-tool.jar')
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.register('packageApp', Exec) {
+    dependsOn shadowJar
+
+    def jarName = shadowJar.archiveFileName.get()
+
+    commandLine 'jpackage',
+            '--input', 'build/libs',
+            '--name', 'SecurePropsApp',
+            '--main-jar', jarName,
+            '--main-class', 'com.cleodual.mulesoft.Main',
+            '--type', 'msi',
+            '--win-dir-chooser',
+            '--win-shortcut-prompt',
+            '--win-shortcut',
+            '--win-menu'
+}
