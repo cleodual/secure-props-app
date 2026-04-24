@@ -31,16 +31,28 @@ test {
 tasks.register('packageApp', Exec) {
     dependsOn shadowJar
 
-    def jarName = shadowJar.archiveFileName.get()
+    doFirst {
+        def jarName = tasks.shadowJar.archiveFileName.get()
+        def installerType = (project.findProperty('installerType') ?: (org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'msi' : 'app-image')).toString()
 
-    commandLine 'jpackage',
-            '--input', 'build/libs',
-            '--name', 'SecurePropsApp',
-            '--main-jar', jarName,
-            '--main-class', 'com.cleodual.mulesoft.Main',
-            '--type', 'msi',
-            '--win-dir-chooser',
-            '--win-shortcut-prompt',
-            '--win-shortcut',
-            '--win-menu'
+        def args = [
+                '--input', 'build/libs',
+                '--dest', 'build/jpackage',
+                '--name', 'SecurePropsApp',
+                '--main-jar', jarName,
+                '--main-class', 'com.cleodual.mulesoft.Main',
+                '--type', installerType
+        ]
+
+        if (installerType == 'msi') {
+            args.addAll([
+                    '--win-dir-chooser',
+                    '--win-shortcut-prompt',
+                    '--win-shortcut',
+                    '--win-menu'
+            ])
+        }
+
+        commandLine(['jpackage'] + args)
+    }
 }

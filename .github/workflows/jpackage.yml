@@ -1,0 +1,53 @@
+name: Build and Package
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: ${{ matrix.os }} (${{ matrix.installerType }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            installerType: msi
+          - os: ubuntu-latest
+            installerType: app-image
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Make Gradle wrapper executable
+        if: runner.os != 'Windows'
+        run: chmod +x ./gradlew
+
+      - name: Build, test, and package
+        run: ./gradlew clean test shadowJar packageApp -PinstallerType=${{ matrix.installerType }}
+
+      - name: Upload fat jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar-${{ matrix.os }}
+          path: build/libs/*-all.jar
+          if-no-files-found: error
+
+      - name: Upload jpackage outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: jpackage-${{ matrix.os }}-${{ matrix.installerType }}
+          path: build/jpackage/**
+          if-no-files-found: error
+
