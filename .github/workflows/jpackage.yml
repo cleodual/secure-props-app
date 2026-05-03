@@ -2,7 +2,7 @@ name: Build Installers (jpackage)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -31,21 +31,19 @@ jobs:
       - name: Build Shadow JAR
         run: ./gradlew shadowJar
 
-      - name: Create jpackage image
+      # ✅ FIX: Linux requires packaging tools or jpackage will fail/hang
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
         run: |
-          mkdir -p build/jpackage
+          sudo apt-get update
+          sudo apt-get install -y fakeroot dpkg-dev rpm
 
-          jpackage \
-            --input build/libs \
-            --name SecureProps \
-            --main-jar secureprops.jar \
-            --main-class com.cleodual.mulesoft.Main \
-            --type app-image \
-            --dest build/jpackage \
-            --java-options "--enable-preview"
-
+      # ---------------------------
+      # LINUX BUILD
+      # ---------------------------
       - name: Build Installer (Linux)
         if: runner.os == 'Linux'
+        shell: bash
         run: |
           jpackage \
             --input build/libs \
@@ -53,21 +51,29 @@ jobs:
             --main-jar secureprops.jar \
             --main-class com.cleodual.mulesoft.Main \
             --type deb \
-            --dest build/jpackage
+            --dest build/jpackage \
+            --linux-shortcut \
+            --linux-package-name secureprops
 
+      # ---------------------------
+      # WINDOWS BUILD (FIXED)
+      # ---------------------------
       - name: Build Installer (Windows)
         if: runner.os == 'Windows'
-        run: |
-          jpackage ^
-            --input build/libs ^
-            --name SecureProps ^
-            --main-jar secureprops.jar ^
-            --main-class com.cleodual.mulesoft.Main ^
-            --type exe ^
-            --dest build/jpackage
+        shell: pwsh
+        run: >
+          jpackage --input build/libs --name SecureProps
+          --main-jar secureprops.jar
+          --main-class com.cleodual.mulesoft.Main
+          --type exe
+          --dest build/jpackage
 
+      # ---------------------------
+      # MACOS BUILD
+      # ---------------------------
       - name: Build Installer (macOS)
         if: runner.os == 'macOS'
+        shell: bash
         run: |
           jpackage \
             --input build/libs \
@@ -77,10 +83,11 @@ jobs:
             --type dmg \
             --dest build/jpackage
 
-      - name: Upload artifacts
+      # ---------------------------
+      # UPLOAD ARTIFACTS
+      # ---------------------------
+      - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
           name: installer-${{ runner.os }}
           path: build/jpackage/**
-
-
