@@ -1,53 +1,46 @@
-name: Build and Package
+name: Build Installers
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
-  package:
-    name: ${{ matrix.os }} (${{ matrix.installerType }})
-    runs-on: ${{ matrix.os }}
+  build:
     strategy:
-      fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            installerType: msi
-          - os: ubuntu-latest
-            installerType: app-image
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "21"
-          cache: gradle
+          java-version: 21
 
-      - name: Make Gradle wrapper executable
+      - name: Make Gradle executable (Linux/macOS)
         if: runner.os != 'Windows'
-        run: chmod +x ./gradlew
+        run: chmod +x gradlew
 
-      - name: Build, test, and package
-        run: ./gradlew clean test shadowJar packageApp -PinstallerType=${{ matrix.installerType }}
+      # ✅ Just call Gradle task (no manual jpackage!)
+      - name: Build installer
+        run: ./gradlew clean jpackage
+        shell: bash
 
-      - name: Upload fat jar
+      # Windows fix (PowerShell)
+      - name: Build installer (Windows)
+        if: runner.os == 'Windows'
+        run: gradlew.bat clean jpackage
+
+      # ✅ Upload packaged installer
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-jar-${{ matrix.os }}
-          path: build/libs/*-all.jar
-          if-no-files-found: error
-
-      - name: Upload jpackage outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: jpackage-${{ matrix.os }}-${{ matrix.installerType }}
-          path: build/jpackage/**
-          if-no-files-found: error
-
+          name: ${{ runner.os }}-installer
+          path: build/jpackage/*

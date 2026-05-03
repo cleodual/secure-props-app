@@ -5,9 +5,7 @@ plugins {
 }
 
 group = 'com.cleodual.mulesoft'
-version = '1.0-SNAPSHOT'
-
-
+version = '1.0.0'
 
 application {
     mainClass = 'com.cleodual.mulesoft.Main'
@@ -19,40 +17,46 @@ repositories {
 
 dependencies {
     implementation files('libs/secure-properties-tool.jar')
+
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 test {
     useJUnitPlatform()
 }
 
-tasks.register('packageApp', Exec) {
+
+shadowJar {
+    archiveFileName = "secureprops.jar"
+}
+
+
+tasks.register('jpackage', Exec) {
     dependsOn shadowJar
 
-    doFirst {
-        def jarName = tasks.shadowJar.archiveFileName.get()
-        def installerType = (project.findProperty('installerType') ?: (org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'msi' : 'app-image')).toString()
+    def os = org.gradle.internal.os.OperatingSystem.current()
 
-        def args = [
-                '--input', 'build/libs',
-                '--dest', 'build/jpackage',
-                '--name', 'SecurePropsApp',
-                '--main-jar', jarName,
-                '--main-class', 'com.cleodual.mulesoft.Main',
-                '--type', installerType
+    def installerType = project.findProperty('installerType') ?:
+            (os.isWindows() ? 'msi' :
+                    os.isMacOsX() ? 'dmg' : 'deb')
+
+    def jpackageArgs = [
+            '--input', "$buildDir/libs",
+            '--dest', "$buildDir/jpackage",
+            '--name', 'SecurePropsApp',
+            '--main-jar', 'secureprops.jar',
+            '--main-class', application.mainClass.get(),
+            '--type', installerType
+    ]
+
+    if (os.isWindows()) {
+        jpackageArgs += [
+                '--win-dir-chooser',
+                '--win-shortcut',
+                '--win-menu'
         ]
-
-        if (installerType == 'msi') {
-            args.addAll([
-                    '--win-dir-chooser',
-                    '--win-shortcut-prompt',
-                    '--win-shortcut',
-                    '--win-menu'
-            ])
-        }
-
-        commandLine(['jpackage'] + args)
     }
+
+    commandLine(['jpackage'] + jpackageArgs)
 }
