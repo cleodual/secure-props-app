@@ -59,7 +59,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Fixes the 403 Permission Error
+      contents: write
     steps:
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
@@ -74,3 +74,5 @@ jobs:
           name: Release ${{ github.ref_name }}
           files: release-files/*
           generate_release_notes: true
+          token: '${{ github.token }}'
+
