@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.cleodual.mulesoft'
-version = project.findProperty("version") ?: "1.0.0"
+version = project.findProperty("version") ?: "1.0.1"
 
 application {
     mainClass = 'com.cleodual.mulesoft.Main'
