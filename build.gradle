@@ -28,32 +28,3 @@ test {
 shadowJar {
     archiveFileName = "secureprops.jar"
 }
-
-tasks.register('jpackage', Exec) {
-    dependsOn shadowJar
-
-    // Determine OS and default installer type
-    def os = org.gradle.internal.os.OperatingSystem.current()
-    def installerType = project.findProperty('installerType') ?:
-            (os.isWindows() ? 'msi' : os.isMacOsX() ? 'dmg' : 'deb')
-
-    // Access build directory using modern API
-    def buildDirPath = layout.buildDirectory.get().asFile.absolutePath
-
-    // Configure jpackage arguments
-    def argsList = [
-            '--input', "${buildDirPath}/libs",
-            '--dest', "${buildDirPath}/jpackage",
-            '--name', 'SecurePropsApp',
-            '--main-jar', 'secureprops.jar',
-            '--main-class', application.mainClass.get(),
-            '--type', installerType,
-            '--app-version', version.replaceAll("-.*", "") // jpackage requires strict x.y.z format
-    ]
-
-    if (os.isWindows()) {
-        argsList += ['--win-dir-chooser', '--win-shortcut', '--win-menu']
-    }
-
-    commandLine(['jpackage'] + argsList)
-}
