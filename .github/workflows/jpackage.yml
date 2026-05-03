@@ -6,26 +6,17 @@ on:
       - "v*"
 
 permissions:
-  contents: write   # ✅ REQUIRED by action-gh-release
+  contents: write
 
 jobs:
   build:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-
     runs-on: ${{ matrix.os }}
-
     steps:
-      # -----------------------
-      # CHECKOUT
-      # -----------------------
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # -----------------------
-      # JAVA
-      # -----------------------
       - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
@@ -33,9 +24,6 @@ jobs:
           java-version: 21
           cache: gradle
 
-      # -----------------------
-      # GRADLE BUILD
-      # -----------------------
       - name: Make Gradle executable
         if: runner.os != 'Windows'
         run: chmod +x gradlew
@@ -43,81 +31,39 @@ jobs:
       - name: Build Shadow JAR
         run: ./gradlew shadowJar
 
-      # -----------------------
-      # LINUX FIX (MANDATORY)
-      # -----------------------
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fakeroot dpkg-dev rpm
+        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg-dev rpm
 
-      # -----------------------
-      # BUILD INSTALLERS
-      # -----------------------
-
-      - name: Build Linux (.deb)
-        if: runner.os == 'Linux'
+      - name: Build Installers (jpackage)
         shell: bash
         run: |
-          jpackage \
-            --input build/libs \
-            --name SecureProps \
-            --main-jar secureprops.jar \
-            --main-class com.cleodual.mulesoft.Main \
-            --type deb \
-            --dest build/jpackage \
-            --linux-package-name secureprops
+          TYPE="deb"
+          [[ "$RUNNER_OS" == "Windows" ]] && TYPE="exe"
+          [[ "$RUNNER_OS" == "macOS" ]] && TYPE="dmg"
+          
+          jpackage --input build/libs --name SecureProps --main-jar secureprops.jar \
+          --main-class com.cleodual.mulesoft.Main --type $TYPE --dest dist
 
-      - name: Build Windows (.exe)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: >
-          jpackage --input build/libs --name SecureProps
-          --main-jar secureprops.jar
-          --main-class com.cleodual.mulesoft.Main
-          --type exe
-          --dest build/jpackage
+      # Upload the result so the release job can find it
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: dist/*
 
-      - name: Build macOS (.dmg)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          jpackage \
-            --input build/libs \
-            --name SecureProps \
-            --main-jar secureprops.jar \
-            --main-class com.cleodual.mulesoft.Main \
-            --type dmg \
-            --dest build/jpackage
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
 
-      # -----------------------
-      # MOVE FILES (IMPORTANT)
-      # -----------------------
-      - name: Prepare release files
-        shell: bash
-        run: |
-          mkdir release
-          VERSION=${GITHUB_REF_NAME}
-
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            cp build/jpackage/*.deb release/SecureProps-$VERSION.deb
-          elif [ "$RUNNER_OS" = "Windows" ]; then
-            cp build/jpackage/*.exe release/SecureProps-$VERSION.exe
-          elif [ "$RUNNER_OS" = "macOS" ]; then
-            cp build/jpackage/*.dmg release/SecureProps-$VERSION.dmg
-          fi
-
-          ls -R release
-
-      # -----------------------
-      # RELEASE (DOCS CORRECT)
-      # -----------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}   # explicit (recommended)
-          name: Release ${{ github.ref_name }}
-          files: release/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: release-files/*
+          generate_release_notes: true
