@@ -5,7 +5,9 @@ plugins {
 }
 
 group = 'com.cleodual.mulesoft'
-version = '1.0.0'
+
+// ✅ Version from CI (tag) or fallback
+version = project.findProperty("version") ?: "1.0.0"
 
 application {
     mainClass = 'com.cleodual.mulesoft.Main'
@@ -26,12 +28,16 @@ test {
     useJUnitPlatform()
 }
 
-
+//
+// ✅ Stable fat JAR name (CRITICAL)
+//
 shadowJar {
     archiveFileName = "secureprops.jar"
 }
 
-
+//
+// ✅ Clean jpackage task
+//
 tasks.register('jpackage', Exec) {
     dependsOn shadowJar
 
@@ -41,22 +47,23 @@ tasks.register('jpackage', Exec) {
             (os.isWindows() ? 'msi' :
                     os.isMacOsX() ? 'dmg' : 'deb')
 
-    def jpackageArgs = [
+    def args = [
             '--input', "$buildDir/libs",
             '--dest', "$buildDir/jpackage",
             '--name', 'SecurePropsApp',
             '--main-jar', 'secureprops.jar',
             '--main-class', application.mainClass.get(),
-            '--type', installerType
+            '--type', installerType,
+            '--app-version', version
     ]
 
     if (os.isWindows()) {
-        jpackageArgs += [
+        args += [
                 '--win-dir-chooser',
                 '--win-shortcut',
                 '--win-menu'
         ]
     }
 
-    commandLine(['jpackage'] + jpackageArgs)
+    commandLine(['jpackage'] + args)
 }

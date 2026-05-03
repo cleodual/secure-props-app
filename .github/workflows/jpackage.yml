@@ -1,4 +1,4 @@
-name: Build Installers
+name: Build & Release Installers
 
 on:
   push:
@@ -18,6 +18,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -28,19 +35,37 @@ jobs:
         if: runner.os != 'Windows'
         run: chmod +x gradlew
 
-      # ✅ Just call Gradle task (no manual jpackage!)
-      - name: Build installer
-        run: ./gradlew clean jpackage
-        shell: bash
+      # ✅ Linux + macOS
+      - name: Build installer (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ./gradlew clean jpackage -Pversion=$VERSION
 
-      # Windows fix (PowerShell)
+      # ✅ Windows (FIXED)
       - name: Build installer (Windows)
         if: runner.os == 'Windows'
-        run: gradlew.bat clean jpackage
+        run: .\gradlew.bat clean jpackage -Pversion=$env:VERSION
 
-      # ✅ Upload packaged installer
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ runner.os }}-installer
           path: build/jpackage/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            **/*.msi
+            **/*.exe
+            **/*.dmg
+            **/*.pkg
+            **/*.deb
+            **/*.rpm
