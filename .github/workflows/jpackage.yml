@@ -8,6 +8,7 @@ on:
 # ✅ REQUIRED: fixes "Resource not accessible by integration"
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build:
@@ -101,26 +102,48 @@ jobs:
           VERSION=${GITHUB_REF_NAME}
 
           echo "Detected OS: $RUNNER_OS"
+          echo "Looking for installers..."
+          ls -la build/jpackage/ || echo "jpackage directory not found"
 
           if [ "$RUNNER_OS" = "Linux" ]; then
-            FILE=$(ls build/jpackage/*.deb | head -n 1)
-            mv "$FILE" "SecureProps-$VERSION.deb"
+            FILE=$(find build/jpackage -name "*.deb" | head -n 1)
+            if [ -n "$FILE" ]; then
+              mv "$FILE" "SecureProps-$VERSION.deb"
+              echo "Created: SecureProps-$VERSION.deb"
+            fi
 
           elif [ "$RUNNER_OS" = "Windows" ]; then
-            FILE=$(ls build/jpackage/*.exe | head -n 1)
-            mv "$FILE" "SecureProps-$VERSION.exe"
+            FILE=$(find build/jpackage -name "*.exe" | head -n 1)
+            if [ -n "$FILE" ]; then
+              mv "$FILE" "SecureProps-$VERSION.exe"
+              echo "Created: SecureProps-$VERSION.exe"
+            fi
 
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            FILE=$(ls build/jpackage/*.dmg | head -n 1)
-            mv "$FILE" "SecureProps-$VERSION.dmg"
+            FILE=$(find build/jpackage -name "*.dmg" | head -n 1)
+            if [ -n "$FILE" ]; then
+              mv "$FILE" "SecureProps-$VERSION.dmg"
+              echo "Created: SecureProps-$VERSION.dmg"
+            fi
           fi
+          
+          echo "Files in current directory:"
+          ls -la SecureProps-* 2>/dev/null || echo "No SecureProps files found"
 
       # -----------------------
       # DEBUG (optional but useful)
       # -----------------------
       - name: List files
         shell: bash
-        run: ls -R
+        run: |
+          echo "=== Root directory ==="
+          ls -la
+          echo ""
+          echo "=== Build directory ==="
+          ls -la build/ || echo "build/ not found"
+          echo ""
+          echo "=== Build/jpackage directory ==="
+          ls -la build/jpackage/ || echo "build/jpackage/ not found"
 
       # -----------------------
       # UPLOAD TO GITHUB RELEASE
@@ -132,5 +155,6 @@ jobs:
             SecureProps-*.exe
             SecureProps-*.dmg
             SecureProps-*.deb
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
