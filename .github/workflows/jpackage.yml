@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -31,41 +31,68 @@ jobs:
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg-dev rpm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot dpkg-dev rpm
 
       - name: Build Installers
         shell: bash
         run: |
-          # Determine package type based on OS
-          if [ "$RUNNER_OS" = "Linux" ]; then TYPE="deb"; 
-          elif [ "$RUNNER_OS" = "Windows" ]; then TYPE="exe"; 
-          else TYPE="dmg"; fi
+          mkdir -p dist
+          
+          # Determine package type and filename based on OS
+          if [ "$RUNNER_OS" = "Linux" ]; then 
+            TYPE="deb"
+            FILENAME="secureprops.deb"
+          elif [ "$RUNNER_OS" = "Windows" ]; then 
+            TYPE="exe"
+            FILENAME="secureprops.exe"
+          else 
+            TYPE="dmg"
+            FILENAME="secureprops.dmg"
+          fi
 
+          echo "Building $TYPE installer..."
           jpackage \
             --input build/libs \
             --name SecureProps \
+            --app-version "${GITHUB_REF_NAME#v}" \
             --main-jar secureprops.jar \
             --main-class com.cleodual.mulesoft.Main \
-            --type $TYPE \
-            --dest dist
+            --type "$TYPE" \
+            --dest dist || { echo "jpackage failed"; ls -la dist/; exit 1; }
+
+          echo "Contents of dist directory:"
+          ls -lah dist/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: installer-${{ matrix.os }}
-          path: dist/*
+          name: installers
+          path: dist/
+          retention-days: 1
 
   release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     steps:
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
+          name: installers
           path: release-files
-          merge-multiple: true
+
+      - name: List downloaded files
+        shell: bash
+        run: |
+          echo "=== Contents of release-files directory ==="
+          find release-files -type f -exec ls -lh {} \;
+          echo ""
+          echo "=== Files to upload ==="
+          find release-files -type f
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -74,5 +101,9 @@ jobs:
           name: Release ${{ github.ref_name }}
           files: release-files/*
           generate_release_notes: true
-          token: '${{ github.token }}'
+          fail_on_unmatched_files: false
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
