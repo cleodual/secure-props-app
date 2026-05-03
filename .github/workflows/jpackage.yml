@@ -35,19 +35,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fakeroot dpkg-dev rpm
 
-      - name: Install WiX Toolset (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3111rtm/wix311.exe"
-          $wixPath = "$env:TEMP\wix311.exe"
-          Write-Host "Downloading WiX toolset..."
-          (New-Object System.Net.ServicePointManager).SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-          Invoke-WebRequest -Uri $wixUrl -OutFile $wixPath
-          Write-Host "Installing WiX toolset..."
-          & $wixPath /install /quiet /norestart
-          Write-Host "WiX toolset installed successfully"
-
       - name: Build Installers
         shell: bash
         run: |
@@ -57,7 +44,7 @@ jobs:
           if [ "$RUNNER_OS" = "Linux" ]; then 
             TYPE="deb"
           elif [ "$RUNNER_OS" = "Windows" ]; then 
-            TYPE="msi"
+            TYPE="exe"
           else 
             TYPE="dmg"
           fi
@@ -65,7 +52,7 @@ jobs:
           echo "Building $TYPE installer..."
           
           # Build jpackage command with platform-specific options
-          if [ "$TYPE" = "msi" ]; then
+          if [ "$TYPE" = "exe" ]; then
             jpackage \
               --input build/libs \
               --name SecureProps \
@@ -91,6 +78,27 @@ jobs:
 
           echo "Contents of dist directory:"
           ls -lah dist/
+          
+          # Verify correct installer type was created
+          if [ "$TYPE" = "exe" ]; then
+            if ! find dist -name "*.exe" -type f > /dev/null; then
+              echo "ERROR: No .exe file found!"
+              exit 1
+            fi
+            echo "✅ EXE file created successfully"
+          elif [ "$TYPE" = "deb" ]; then
+            if ! find dist -name "*.deb" -type f > /dev/null; then
+              echo "ERROR: No .deb file found!"
+              exit 1
+            fi
+            echo "✅ DEB file created successfully"
+          elif [ "$TYPE" = "dmg" ]; then
+            if ! find dist -name "*.dmg" -type f > /dev/null; then
+              echo "ERROR: No .dmg file found!"
+              exit 1
+            fi
+            echo "✅ DMG file created successfully"
+          fi
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -111,6 +119,7 @@ jobs:
         with:
           name: installers
           path: release-files
+
 
       - name: List downloaded files
         shell: bash
