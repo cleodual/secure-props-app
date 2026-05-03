@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+# ✅ REQUIRED: fixes "Resource not accessible by integration"
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -14,9 +18,15 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      # -----------------------
+      # CHECKOUT
+      # -----------------------
       - name: Checkout
         uses: actions/checkout@v4
 
+      # -----------------------
+      # JAVA SETUP
+      # -----------------------
       - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
@@ -24,6 +34,9 @@ jobs:
           java-version: 21
           cache: gradle
 
+      # -----------------------
+      # GRADLE SETUP
+      # -----------------------
       - name: Make Gradle executable (Linux/macOS)
         if: runner.os != 'Windows'
         run: chmod +x gradlew
@@ -31,7 +44,9 @@ jobs:
       - name: Build Shadow JAR
         run: ./gradlew shadowJar
 
-      # ✅ Linux fix
+      # -----------------------
+      # LINUX FIX (CRITICAL)
+      # -----------------------
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -44,6 +59,7 @@ jobs:
 
       - name: Build Linux installer
         if: runner.os == 'Linux'
+        shell: bash
         run: |
           jpackage \
             --input build/libs \
@@ -56,6 +72,7 @@ jobs:
 
       - name: Build Windows installer
         if: runner.os == 'Windows'
+        shell: pwsh
         run: >
           jpackage --input build/libs --name SecureProps
           --main-jar secureprops.jar
@@ -65,6 +82,7 @@ jobs:
 
       - name: Build macOS installer
         if: runner.os == 'macOS'
+        shell: bash
         run: |
           jpackage \
             --input build/libs \
@@ -75,26 +93,38 @@ jobs:
             --dest build/jpackage
 
       # -----------------------
-      # RENAME FILES (IMPORTANT)
+      # RENAME OUTPUTS (FIXES "file not found")
       # -----------------------
-
-      - name: Rename outputs
+      - name: Rename installers
+        shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME}
 
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            mv build/jpackage/*.deb SecureProps-$VERSION.deb
-          elif [[ "$RUNNER_OS" == "Windows" ]]; then
-            mv build/jpackage/*.exe SecureProps-$VERSION.exe
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            mv build/jpackage/*.dmg SecureProps-$VERSION.dmg
+          echo "Detected OS: $RUNNER_OS"
+
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            FILE=$(ls build/jpackage/*.deb | head -n 1)
+            mv "$FILE" "SecureProps-$VERSION.deb"
+
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            FILE=$(ls build/jpackage/*.exe | head -n 1)
+            mv "$FILE" "SecureProps-$VERSION.exe"
+
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            FILE=$(ls build/jpackage/*.dmg | head -n 1)
+            mv "$FILE" "SecureProps-$VERSION.dmg"
           fi
+
+      # -----------------------
+      # DEBUG (optional but useful)
+      # -----------------------
+      - name: List files
         shell: bash
+        run: ls -R
 
       # -----------------------
-      # UPLOAD TO RELEASE
+      # UPLOAD TO GITHUB RELEASE
       # -----------------------
-
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -104,4 +134,3 @@ jobs:
             SecureProps-*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
