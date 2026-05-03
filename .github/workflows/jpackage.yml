@@ -1,9 +1,9 @@
-name: Build Installers (jpackage)
+name: Build & Release Installers
 
 on:
   push:
-    branches: ["main"]
-  workflow_dispatch:
+    tags:
+      - "v*"
 
 jobs:
   build:
@@ -31,19 +31,19 @@ jobs:
       - name: Build Shadow JAR
         run: ./gradlew shadowJar
 
-      # ✅ FIX: Linux requires packaging tools or jpackage will fail/hang
-      - name: Install Linux packaging dependencies
+      # ✅ Linux fix
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y fakeroot dpkg-dev rpm
 
-      # ---------------------------
-      # LINUX BUILD
-      # ---------------------------
-      - name: Build Installer (Linux)
+      # -----------------------
+      # BUILD INSTALLERS
+      # -----------------------
+
+      - name: Build Linux installer
         if: runner.os == 'Linux'
-        shell: bash
         run: |
           jpackage \
             --input build/libs \
@@ -52,15 +52,10 @@ jobs:
             --main-class com.cleodual.mulesoft.Main \
             --type deb \
             --dest build/jpackage \
-            --linux-shortcut \
             --linux-package-name secureprops
 
-      # ---------------------------
-      # WINDOWS BUILD (FIXED)
-      # ---------------------------
-      - name: Build Installer (Windows)
+      - name: Build Windows installer
         if: runner.os == 'Windows'
-        shell: pwsh
         run: >
           jpackage --input build/libs --name SecureProps
           --main-jar secureprops.jar
@@ -68,12 +63,8 @@ jobs:
           --type exe
           --dest build/jpackage
 
-      # ---------------------------
-      # MACOS BUILD
-      # ---------------------------
-      - name: Build Installer (macOS)
+      - name: Build macOS installer
         if: runner.os == 'macOS'
-        shell: bash
         run: |
           jpackage \
             --input build/libs \
@@ -83,11 +74,34 @@ jobs:
             --type dmg \
             --dest build/jpackage
 
-      # ---------------------------
-      # UPLOAD ARTIFACTS
-      # ---------------------------
-      - name: Upload installers
-        uses: actions/upload-artifact@v4
+      # -----------------------
+      # RENAME FILES (IMPORTANT)
+      # -----------------------
+
+      - name: Rename outputs
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            mv build/jpackage/*.deb SecureProps-$VERSION.deb
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            mv build/jpackage/*.exe SecureProps-$VERSION.exe
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            mv build/jpackage/*.dmg SecureProps-$VERSION.dmg
+          fi
+        shell: bash
+
+      # -----------------------
+      # UPLOAD TO RELEASE
+      # -----------------------
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
         with:
-          name: installer-${{ runner.os }}
-          path: build/jpackage/**
+          files: |
+            SecureProps-*.exe
+            SecureProps-*.dmg
+            SecureProps-*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
