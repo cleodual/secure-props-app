@@ -5,10 +5,8 @@ on:
     tags:
       - "v*"
 
-# ✅ REQUIRED: fixes "Resource not accessible by integration"
 permissions:
-  contents: write
-  packages: write
+  contents: write   # ✅ REQUIRED by action-gh-release
 
 jobs:
   build:
@@ -26,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       # -----------------------
-      # JAVA SETUP
+      # JAVA
       # -----------------------
       - name: Setup JDK 21
         uses: actions/setup-java@v4
@@ -36,9 +34,9 @@ jobs:
           cache: gradle
 
       # -----------------------
-      # GRADLE SETUP
+      # GRADLE BUILD
       # -----------------------
-      - name: Make Gradle executable (Linux/macOS)
+      - name: Make Gradle executable
         if: runner.os != 'Windows'
         run: chmod +x gradlew
 
@@ -46,7 +44,7 @@ jobs:
         run: ./gradlew shadowJar
 
       # -----------------------
-      # LINUX FIX (CRITICAL)
+      # LINUX FIX (MANDATORY)
       # -----------------------
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -58,7 +56,7 @@ jobs:
       # BUILD INSTALLERS
       # -----------------------
 
-      - name: Build Linux installer
+      - name: Build Linux (.deb)
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -71,7 +69,7 @@ jobs:
             --dest build/jpackage \
             --linux-package-name secureprops
 
-      - name: Build Windows installer
+      - name: Build Windows (.exe)
         if: runner.os == 'Windows'
         shell: pwsh
         run: >
@@ -81,7 +79,7 @@ jobs:
           --type exe
           --dest build/jpackage
 
-      - name: Build macOS installer
+      - name: Build macOS (.dmg)
         if: runner.os == 'macOS'
         shell: bash
         run: |
@@ -94,67 +92,32 @@ jobs:
             --dest build/jpackage
 
       # -----------------------
-      # RENAME OUTPUTS (FIXES "file not found")
+      # MOVE FILES (IMPORTANT)
       # -----------------------
-      - name: Rename installers
+      - name: Prepare release files
         shell: bash
         run: |
+          mkdir release
           VERSION=${GITHUB_REF_NAME}
 
-          echo "Detected OS: $RUNNER_OS"
-          echo "Looking for installers..."
-          ls -la build/jpackage/ || echo "jpackage directory not found"
-
           if [ "$RUNNER_OS" = "Linux" ]; then
-            FILE=$(find build/jpackage -name "*.deb" | head -n 1)
-            if [ -n "$FILE" ]; then
-              mv "$FILE" "SecureProps-$VERSION.deb"
-              echo "Created: SecureProps-$VERSION.deb"
-            fi
-
+            cp build/jpackage/*.deb release/SecureProps-$VERSION.deb
           elif [ "$RUNNER_OS" = "Windows" ]; then
-            FILE=$(find build/jpackage -name "*.exe" | head -n 1)
-            if [ -n "$FILE" ]; then
-              mv "$FILE" "SecureProps-$VERSION.exe"
-              echo "Created: SecureProps-$VERSION.exe"
-            fi
-
+            cp build/jpackage/*.exe release/SecureProps-$VERSION.exe
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            FILE=$(find build/jpackage -name "*.dmg" | head -n 1)
-            if [ -n "$FILE" ]; then
-              mv "$FILE" "SecureProps-$VERSION.dmg"
-              echo "Created: SecureProps-$VERSION.dmg"
-            fi
+            cp build/jpackage/*.dmg release/SecureProps-$VERSION.dmg
           fi
-          
-          echo "Files in current directory:"
-          ls -la SecureProps-* 2>/dev/null || echo "No SecureProps files found"
+
+          ls -R release
 
       # -----------------------
-      # DEBUG (optional but useful)
+      # RELEASE (DOCS CORRECT)
       # -----------------------
-      - name: List files
-        shell: bash
-        run: |
-          echo "=== Root directory ==="
-          ls -la
-          echo ""
-          echo "=== Build directory ==="
-          ls -la build/ || echo "build/ not found"
-          echo ""
-          echo "=== Build/jpackage directory ==="
-          ls -la build/jpackage/ || echo "build/jpackage/ not found"
-
-      # -----------------------
-      # UPLOAD TO GITHUB RELEASE
-      # -----------------------
-      - name: Upload Release Assets
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            SecureProps-*.exe
-            SecureProps-*.dmg
-            SecureProps-*.deb
-          fail_on_unmatched_files: false
+          tag_name: ${{ github.ref_name }}   # explicit (recommended)
+          name: Release ${{ github.ref_name }}
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
