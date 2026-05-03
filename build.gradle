@@ -5,8 +5,6 @@ plugins {
 }
 
 group = 'com.cleodual.mulesoft'
-
-// ✅ Version from CI (tag) or fallback
 version = project.findProperty("version") ?: "1.0.0"
 
 application {
@@ -19,7 +17,6 @@ repositories {
 
 dependencies {
     implementation files('libs/secure-properties-tool.jar')
-
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }
@@ -28,42 +25,35 @@ test {
     useJUnitPlatform()
 }
 
-//
-// ✅ Stable fat JAR name (CRITICAL)
-//
 shadowJar {
     archiveFileName = "secureprops.jar"
 }
 
-//
-// ✅ Clean jpackage task
-//
 tasks.register('jpackage', Exec) {
     dependsOn shadowJar
 
+    // Determine OS and default installer type
     def os = org.gradle.internal.os.OperatingSystem.current()
-
     def installerType = project.findProperty('installerType') ?:
-            (os.isWindows() ? 'msi' :
-                    os.isMacOsX() ? 'dmg' : 'deb')
+            (os.isWindows() ? 'msi' : os.isMacOsX() ? 'dmg' : 'deb')
 
-    def args = [
-            '--input', "$buildDir/libs",
-            '--dest', "$buildDir/jpackage",
+    // Access build directory using modern API
+    def buildDirPath = layout.buildDirectory.get().asFile.absolutePath
+
+    // Configure jpackage arguments
+    def argsList = [
+            '--input', "${buildDirPath}/libs",
+            '--dest', "${buildDirPath}/jpackage",
             '--name', 'SecurePropsApp',
             '--main-jar', 'secureprops.jar',
             '--main-class', application.mainClass.get(),
             '--type', installerType,
-            '--app-version', version
+            '--app-version', version.replaceAll("-.*", "") // jpackage requires strict x.y.z format
     ]
 
     if (os.isWindows()) {
-        args += [
-                '--win-dir-chooser',
-                '--win-shortcut',
-                '--win-menu'
-        ]
+        argsList += ['--win-dir-chooser', '--win-shortcut', '--win-menu']
     }
 
-    commandLine(['jpackage'] + args)
+    commandLine(['jpackage'] + argsList)
 }
