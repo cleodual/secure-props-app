@@ -61,6 +61,7 @@ jobs:
               --main-class com.cleodual.mulesoft.Main \
               --type "$TYPE" \
               --dest dist \
+              --icon icon/icon.ico \
               --win-menu \
               --win-menu-group "SecureProps" \
               --win-shortcut \
@@ -75,7 +76,8 @@ jobs:
               --main-jar secureprops.jar \
               --main-class com.cleodual.mulesoft.Main \
               --type "$TYPE" \
-              --dest dist || { echo "jpackage failed"; ls -la dist/; exit 1; }
+              --dest dist \
+              --icon icon/icon.$([ "$TYPE" = "dmg" ] && echo "icns" || echo "png") || { echo "jpackage failed"; ls -la dist/; exit 1; }
           fi
 
           echo "Contents of dist directory:"

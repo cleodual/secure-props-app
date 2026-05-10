@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.cleodual.mulesoft'
-version = project.findProperty("version") ?: "1.0.1"
+version = project.findProperty("version") ?: "1.0.2"
 
 application {
     mainClass = 'com.cleodual.mulesoft.Main'
@@ -28,3 +28,4 @@ test {
 shadowJar {
     archiveFileName = "secureprops.jar"
 }
+
