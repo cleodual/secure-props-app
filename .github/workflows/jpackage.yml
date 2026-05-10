@@ -5,6 +5,8 @@ on:
     tags:
       - "v*"
 
+  workflow_dispatch:
+
 jobs:
   build:
     strategy:
@@ -50,6 +52,16 @@ jobs:
           fi
 
           echo "Building $TYPE installer..."
+          echo "RUNNER_OS: $RUNNER_OS"
+          echo "Java version:"
+          java -version
+          echo ""
+          echo "jpackage location:"
+          which jpackage || echo "jpackage not found in PATH"
+          echo ""
+          echo "Contents of build/libs:"
+          ls -lah build/libs/
+          echo ""
           
           # Build jpackage command with platform-specific options
           if [ "$TYPE" = "exe" ]; then
@@ -69,6 +81,8 @@ jobs:
               --win-per-user-install \
               --win-dir-chooser || { echo "jpackage failed"; ls -la dist/; exit 1; }
           else
+            ICON_EXT=$([ "$TYPE" = "dmg" ] && echo "icns" || echo "png")
+            echo "Using icon: icon/icon.$ICON_EXT"
             jpackage \
               --input build/libs \
               --name SecureProps \
@@ -77,9 +91,11 @@ jobs:
               --main-class com.cleodual.mulesoft.Main \
               --type "$TYPE" \
               --dest dist \
-              --icon icon/icon.$([ "$TYPE" = "dmg" ] && echo "icns" || echo "png") || { echo "jpackage failed"; ls -la dist/; exit 1; }
+              --icon icon/icon.$ICON_EXT \
+              --verbose || { echo "jpackage failed"; ls -la dist/; exit 1; }
           fi
 
+          echo ""
           echo "Contents of dist directory:"
           ls -lah dist/
           
@@ -107,7 +123,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: installers
+          name: installers-${{ matrix.os }}
           path: dist/
           retention-days: 1
 
@@ -121,9 +137,7 @@ jobs:
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: installers
           path: release-files
-
 
       - name: List downloaded files
         shell: bash
@@ -133,13 +147,23 @@ jobs:
           echo ""
           echo "=== Files to upload ==="
           find release-files -type f
+          echo ""
+          echo "=== Consolidating files to top level ==="
+          find release-files -type f -name "*.exe" -o -name "*.deb" -o -name "*.dmg" | while read file; do
+            cp "$file" release-files/
+          done
+          echo "Final release directory:"
+          ls -lah release-files/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          files: release-files/*
+          files: |
+            release-files/*.exe
+            release-files/*.deb
+            release-files/*.dmg
           generate_release_notes: true
           fail_on_unmatched_files: false
           draft: false
