@@ -43,3 +43,4 @@ bin/
 .DS_Store
 /SecurePropsApp-1.0.msi
 /.idea/
+/REFACTORING_NOTES.md
