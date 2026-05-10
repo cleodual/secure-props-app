@@ -6,6 +6,11 @@ on:
       - "v*"
 
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0). Only used for manual workflow dispatch.'
+        required: false
+        default: '1.0.0'
 
 jobs:
   build:
@@ -63,12 +68,25 @@ jobs:
           ls -lah build/libs/
           echo ""
           
+          # Extract version - use input if workflow_dispatch, tag if push, otherwise default to 1.0.0
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            echo "Using version from workflow input: $VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            # Validate version format (must be digits and dots)
+            if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+              echo "Version '$VERSION' is not in valid format, using default 1.0.0"
+              VERSION="1.0.0"
+            fi
+          fi
+          
           # Build jpackage command with platform-specific options
           if [ "$TYPE" = "exe" ]; then
             jpackage \
               --input build/libs \
               --name SecureProps \
-              --app-version "${GITHUB_REF_NAME#v}" \
+              --app-version "$VERSION" \
               --main-jar secureprops.jar \
               --main-class com.cleodual.mulesoft.Main \
               --type "$TYPE" \
@@ -86,7 +104,7 @@ jobs:
             jpackage \
               --input build/libs \
               --name SecureProps \
-              --app-version "${GITHUB_REF_NAME#v}" \
+              --app-version "$VERSION" \
               --main-jar secureprops.jar \
               --main-class com.cleodual.mulesoft.Main \
               --type "$TYPE" \
